@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Housat AI logo">
+  <path fill="#0F3D3A" d="M96 128h74v276H96V128Zm246 0h74v276h-74V128Z" />
+  <path fill="#0F3D3A" d="M154 300 256 222l102 78v-70L256 152 154 230v70Z" />
+  <path fill="#0F3D3A" d="M214 310h24v24h-24v-24Zm60 0h24v24h-24v-24Zm-60 56h24v24h-24v-24Zm60 0h24v24h-24v-24Z" />
+  <path fill="#D08A2E" d="M378 78c10 45 35 70 80 80-45 10-70 35-80 80-10-45-35-70-80-80 45-10 70-35 80-80Z" />
+</svg>
