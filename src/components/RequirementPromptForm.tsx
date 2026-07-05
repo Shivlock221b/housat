@@ -401,8 +401,8 @@ export function RequirementPromptForm() {
     if (followUpKey) {
       setFollowUps((current) => ({ ...current, [followUpKey]: true }));
     }
-    if (hadParsedRequirement && !followUpKey) {
-      setMessages((items) => [...items, { role: "assistant", content: "Updated your search brief." }]);
+    if (hadParsedRequirement && !followUpKey && readyForSummary && reviewState === "reviewing") {
+      setMessages((items) => [...items, { role: "assistant", content: "Search Edited" }]);
     }
   }
 
@@ -516,14 +516,14 @@ export function RequirementPromptForm() {
   return (
     <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <section className="flex min-h-[calc(100vh-48px)] min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl bg-background/90 px-1 py-2 backdrop-blur">
           <div className="flex min-w-0 items-center gap-3">
             <HousatLogo size="lg" />
             <div className="min-w-0">
               <h1 className="brand-wordmark truncate text-4xl leading-none text-primary sm:text-5xl">Housat AI</h1>
               <p className="flex items-center gap-2 text-sm text-foreground">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                Your rental concierge is online
+                Rental concierge online
               </p>
             </div>
           </div>
@@ -539,12 +539,12 @@ export function RequirementPromptForm() {
           </div>
         </div>
         <div className="chat-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-white/80 shadow-[0_28px_80px_rgba(15,61,58,0.16)] ring-1 ring-primary/10">
-        <div className="chat-thread flex min-h-0 flex-1 flex-col">
+        <div className="chat-thread flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
             {messages.map((message, index) => (
               <MessageBubble key={`${message.role}-${index}`} message={message} />
             ))}
-            {readyForSummary && parsed ? (
+            {readyForSummary && parsed && reviewState === "reviewing" ? (
               <div className="flex items-start gap-3">
                 <AssistantAvatar />
                 <div className="w-full max-w-[94%] rounded-[22px] rounded-tl-md border border-border/70 bg-card/95 p-4 text-sm text-foreground shadow-[0_16px_36px_rgba(15,61,58,0.08)]">
@@ -587,7 +587,7 @@ export function RequirementPromptForm() {
             ))}
           </div>
 
-          <div className="sticky bottom-0 z-20 border-t border-border/70 bg-card/92 px-3 py-2 shadow-[0_-16px_32px_rgba(15,61,58,0.08)] backdrop-blur sm:px-5 sm:py-4">
+          <div className="shrink-0 border-t border-border/70 bg-card/92 px-3 py-2 shadow-[0_-16px_32px_rgba(15,61,58,0.08)] backdrop-blur sm:px-5 sm:py-4">
             <div className="rounded-[28px] border border-primary/15 bg-white/90 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_12px_28px_rgba(15,61,58,0.08)]">
               <div className="flex items-end gap-2">
                 <Textarea
