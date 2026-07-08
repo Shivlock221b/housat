@@ -10,9 +10,10 @@ export default async function Page({ params }: { params: { publicToken: string }
     if (ticket) {
       const { data } = await supabase
         .from("ticket_property_candidates")
-        .select("id,ticket_id,property_id,source,match_score,recommendation,hard_filter_status,matched_requirements,missing_information,risks,pros,cons,verification_questions,subjective_assessments,properties(id,title,description,city,locality,rent,maintenance,deposit,brokerage,bhk,furnishing,parking,available_from,photos,video_url,verification_status,spaciousness_score,sunlight_score,maintenance_condition_score,general_quality_score,vision_analysis,vision_confidence,pros,cons,missing_info)")
+        .select("id,ticket_id,property_id,source,match_score,final_score,final_rank,shortlist_bucket,ranking_details,recommendation,hard_filter_status,matched_requirements,missing_information,risks,pros,cons,verification_questions,subjective_assessments,properties(id,title,description,city,locality,rent,maintenance,deposit,brokerage,bhk,furnishing,parking,available_from,photos,video_url,verification_status,spaciousness_score,sunlight_score,maintenance_condition_score,general_quality_score,vision_analysis,vision_confidence,media_analysis,user_facing_summary,admin_summary,pros,cons,missing_info)")
         .eq("ticket_id", ticket.id)
         .eq("is_published", true)
+        .order("final_rank", { ascending: true, nullsFirst: false })
         .order("match_score", { ascending: false });
       candidates = data ?? [];
     }

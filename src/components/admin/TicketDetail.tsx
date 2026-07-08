@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CandidateCard } from "./CandidateCard";
 import { ExcelUpload } from "./ExcelUpload";
+import { PropertyDataFeed } from "./PropertyDataFeed";
 import { AdminNotes } from "./AdminNotes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,11 @@ export function TicketDetail({ ticket, candidates, actions, notes }: { ticket: a
     window.location.reload();
   }
 
+  async function rerankShortlist() {
+    await fetch(`/api/admin/tickets/${ticket.id}/rerank`, { method: "POST" });
+    window.location.reload();
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -47,6 +53,9 @@ export function TicketDetail({ ticket, candidates, actions, notes }: { ticket: a
               ))}
             </Select>
             <Button onClick={updateStatus}>Update status</Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={rerankShortlist}>Re-rank shortlist</Button>
           </div>
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             {[
@@ -77,6 +86,7 @@ export function TicketDetail({ ticket, candidates, actions, notes }: { ticket: a
               <span>Phone: {ticket.phone}</span>
               <span>Budget max: {formatCurrency(ticket.budget_max)}</span>
               <span>BHK: {ticket.bhk || "-"}</span>
+              <span>Property type: {(ticket.property_types ?? []).join(", ") || "-"}</span>
               <span>Furnishing: {ticket.furnishing || "-"}</span>
               <span>Tenant: {ticket.tenant_type || "-"}</span>
               <span>Brokerage: {ticket.brokerage_preference || "-"}</span>
@@ -93,7 +103,12 @@ export function TicketDetail({ ticket, candidates, actions, notes }: { ticket: a
         </Card>
       ) : null}
 
-      {tab === "upload" ? <ExcelUpload ticketId={ticket.id} /> : null}
+      {tab === "upload" ? (
+        <div className="space-y-5">
+          <PropertyDataFeed ticketId={ticket.id} />
+          <ExcelUpload ticketId={ticket.id} />
+        </div>
+      ) : null}
 
       {tab === "matches" ? (
         <section className="space-y-3">

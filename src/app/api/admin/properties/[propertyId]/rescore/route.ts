@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: { propertyId:
     budgetMin: ticket.budget_min ?? null,
     budgetMax: ticket.budget_max ?? null,
     bhk: ticket.bhk ?? null,
+    propertyTypes: ticket.property_types ?? [],
     furnishing: ticket.furnishing ?? null,
     moveInDate: ticket.move_in_date ?? null,
     tenantType: ticket.tenant_type ?? null,
@@ -35,9 +36,10 @@ export async function POST(request: Request, { params }: { params: { propertyId:
     confidence: ticket.parse_confidence ?? 0.6
   });
   let propertyForScoring = property;
-  if (property.photos?.length && !property.vision_analysis) {
+  if ((property.photos?.length || property.video_url) && !property.media_analysis && !property.vision_analysis) {
     const { vision } = await analyzePropertyImages({
       photos: property.photos,
+      videoUrl: property.video_url,
       propertyText: [property.title, property.description, property.search_document].filter(Boolean).join("\n")
     });
     propertyForScoring = mergeVisionIntoProperty(property, vision);

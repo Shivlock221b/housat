@@ -1,20 +1,9 @@
 import type { Property } from "@/lib/types";
-import { PropertyVisionSchema, type PropertyVision } from "./schemas";
-
-const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
+import { analyzePropertyMedia } from "./propertyMediaAnalysisAgent";
+import { PropertyVisionSchema, type PropertyMediaAnalysis, type PropertyVision } from "./schemas";
 
 function unique(items: Array<string | null | undefined>) {
   return [...new Set(items.map((item) => item?.trim()).filter(Boolean) as string[])];
-}
-
-function parseJsonObject(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Vision response did not contain JSON.");
-    return JSON.parse(match[0]);
-  }
 }
 
 function fallbackVision(photos: string[]): PropertyVision {
@@ -39,62 +28,55 @@ function fallbackVision(photos: string[]): PropertyVision {
 }
 
 export function hasVisionEnv() {
-  return Boolean(process.env.GROQ_API_KEY && process.env.GROQ_VISION_MODEL);
+  return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
 }
 
 export async function analyzePropertyImages(input: {
   photos?: string[] | null;
+  videoUrl?: string | null;
   propertyText?: string;
 }): Promise<{ vision: PropertyVision; fallbackUsed: boolean }> {
   const photos = unique(input.photos ?? []).slice(0, 6);
-  if (!photos.length || !hasVisionEnv()) {
+  if (!photos.length && !input.videoUrl) {
     return { vision: fallbackVision(photos), fallbackUsed: true };
   }
 
-  try {
-    const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: process.env.GROQ_VISION_MODEL,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "You inspect Indian rental property photos for an admin-reviewed rental concierge. Return JSON only. Be cautious: never claim verified sunlight, spaciousness, condition, safety, or premium feel from photos alone. Use likely/possible/needs_verification language. Do not identify people."
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  `Property context:\n${input.propertyText || "No text context provided."}\n\n` +
-                  "Analyze visible rental quality signals. Return keys: visualSummary, roomTypesVisible, visiblePros, visibleCons, missingVisualEvidence, risks, spaciousnessScore, sunlightScore, maintenanceConditionScore, furnishingQualityScore, generalQualityScore, subjectiveSignals, suggestedVerificationQuestions, confidence."
-              },
-              ...photos.map((url) => ({
-                type: "image_url",
-                image_url: { url }
-              }))
-            ]
-          }
-        ]
-      })
-    });
+  const { mediaAnalysis, fallbackUsed } = await analyzePropertyMedia({
+    photos,
+    videoUrl: input.videoUrl,
+    description: input.propertyText
+  });
+  return { vision: mediaAnalysisToVision(mediaAnalysis), fallbackUsed };
+}
 
-    if (!response.ok) throw new Error(`Groq vision failed: ${response.status}`);
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Groq vision returned no content.");
-    return { vision: PropertyVisionSchema.parse(parseJsonObject(content)), fallbackUsed: false };
-  } catch {
-    return { vision: fallbackVision(photos), fallbackUsed: true };
-  }
+export function mediaAnalysisToVision(mediaAnalysis: PropertyMediaAnalysis): PropertyVision {
+  const vision = PropertyVisionSchema.parse({
+    visualSummary: mediaAnalysis.userFacingCautiousSummary,
+    roomTypesVisible: mediaAnalysis.roomsDetected,
+    visiblePros: [
+      ...mediaAnalysis.spaciousness.evidence,
+      ...mediaAnalysis.sunlight.evidence,
+      ...mediaAnalysis.maintenanceCondition.evidence,
+      ...mediaAnalysis.ventilation.evidence
+    ],
+    visibleCons: [
+      ...mediaAnalysis.spaciousness.risks,
+      ...mediaAnalysis.sunlight.risks,
+      ...mediaAnalysis.maintenanceCondition.risks,
+      ...mediaAnalysis.ventilation.risks
+    ],
+    missingVisualEvidence: mediaAnalysis.missingMedia,
+    risks: mediaAnalysis.redFlags,
+    spaciousnessScore: mediaAnalysis.spaciousness.score,
+    sunlightScore: mediaAnalysis.sunlight.score,
+    maintenanceConditionScore: mediaAnalysis.maintenanceCondition.score,
+    furnishingQualityScore: null,
+    generalQualityScore: null,
+    subjectiveSignals: [],
+    suggestedVerificationQuestions: mediaAnalysis.recommendedQuestions,
+    confidence: mediaAnalysis.confidence
+  });
+  return vision;
 }
 
 function combineScore(primary?: number | null, visual?: number | null) {
@@ -124,6 +106,9 @@ export function mergeVisionIntoProperty(property: Partial<Property>, vision: Pro
     pros: unique([...(property.pros ?? []), ...vision.visiblePros]),
     cons: unique([...(property.cons ?? []), ...vision.visibleCons, ...vision.risks]),
     missing_info: unique([...(property.missing_info ?? []), ...vision.missingVisualEvidence]),
+    media_analysis: property.media_analysis ?? visionAnalysis,
+    user_facing_summary: property.user_facing_summary ?? vision.visualSummary,
+    admin_summary: property.admin_summary ?? (vision.risks.length ? `Media risks: ${vision.risks.join(", ")}` : null),
     verified_notes: unique([property.verified_notes, vision.visualSummary ? `Vision: ${vision.visualSummary}` : null]).join("\n"),
     vision_analysis: visionAnalysis,
     vision_confidence: vision.confidence

@@ -3,6 +3,7 @@ import type { Property, RentalTicket } from "@/lib/types";
 import { deterministicPreScore } from "./deterministicMatching";
 import { scoreProperty } from "./propertyScoringAgent";
 import { analyzePropertyImages, mergeVisionIntoProperty } from "./propertyVisionAgent";
+import { rankAndPersistShortlist } from "./shortlistRankingAgent";
 import { buildSearchDocument } from "./searchDocument";
 import { RentalRequirementSchema } from "./schemas";
 
@@ -16,6 +17,7 @@ export async function matchExistingProperties(ticket: RentalTicket) {
     budgetMin: ticket.budget_min ?? null,
     budgetMax: ticket.budget_max ?? null,
     bhk: ticket.bhk ?? null,
+    propertyTypes: ticket.property_types ?? [],
     furnishing: ticket.furnishing ?? null,
     moveInDate: ticket.move_in_date ?? null,
     tenantType: ticket.tenant_type ?? null,
@@ -52,9 +54,10 @@ export async function matchExistingProperties(ticket: RentalTicket) {
 
   for (const item of top) {
     let propertyForScoring = item.property;
-    if (propertyForScoring.photos?.length && !propertyForScoring.vision_analysis) {
+    if ((propertyForScoring.photos?.length || propertyForScoring.video_url) && !propertyForScoring.media_analysis && !propertyForScoring.vision_analysis) {
       const { vision } = await analyzePropertyImages({
         photos: propertyForScoring.photos,
+        videoUrl: propertyForScoring.video_url,
         propertyText: [propertyForScoring.title, propertyForScoring.description, propertyForScoring.search_document].filter(Boolean).join("\n")
       });
       propertyForScoring = mergeVisionIntoProperty(propertyForScoring, vision) as Property;
@@ -88,5 +91,6 @@ export async function matchExistingProperties(ticket: RentalTicket) {
     );
   }
 
+  await rankAndPersistShortlist(ticket.id, requirements);
   return { matched: top.length };
 }

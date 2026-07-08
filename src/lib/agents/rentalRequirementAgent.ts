@@ -195,6 +195,24 @@ function normalizeBhk(value: unknown) {
   return match ? match[0].toUpperCase().replace(/\s+/g, "") : text;
 }
 
+const propertyTypeOptions = [
+  "Independent / Builder floors",
+  "Individual house / Villa",
+  "Flats / Apartments",
+  "Duplex"
+];
+
+function normalizePropertyTypes(value: unknown) {
+  return dedupeStringArray(dedupeStringArray(toStringArray(value)).flatMap((item) => {
+    const text = item.toLowerCase();
+    if (/builder|independent\s+floor/.test(text)) return [propertyTypeOptions[0]];
+    if (/villa|individual\s+house|independent\s+house/.test(text)) return [propertyTypeOptions[1]];
+    if (/flat|apartment/.test(text)) return [propertyTypeOptions[2]];
+    if (/duplex/.test(text)) return [propertyTypeOptions[3]];
+    return propertyTypeOptions.some((option) => option.toLowerCase() === text) ? [item] : [item];
+  }));
+}
+
 function normalizeNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -249,6 +267,7 @@ function normalizeParsedJson(parsedJson: Record<string, unknown>) {
     budgetMin: normalizeNumber(parsedJson.budgetMin),
     budgetMax: normalizeNumber(parsedJson.budgetMax),
     bhk: normalizeBhk(parsedJson.bhk),
+    propertyTypes: normalizePropertyTypes(parsedJson.propertyTypes ?? parsedJson.propertyType),
     furnishing: normalizeNullableString(parsedJson.furnishing),
     moveInDate: normalizeNullableString(parsedJson.moveInDate),
     tenantType: normalizeNullableString(parsedJson.tenantType),
@@ -270,6 +289,7 @@ function mergeInitialRequirement(fallback: RentalRequirement, normalizedJson: Re
     ...fallback,
     ...normalizedJson,
     preferredLocalities: normalizedJson.preferredLocalities.length ? normalizedJson.preferredLocalities : fallback.preferredLocalities,
+    propertyTypes: normalizedJson.propertyTypes.length ? normalizedJson.propertyTypes : fallback.propertyTypes,
     mustHaves: dedupeStringArray([...(fallback.mustHaves ?? []), ...normalizedJson.mustHaves]),
     niceToHaves: dedupeStringArray([...(fallback.niceToHaves ?? []), ...normalizedJson.niceToHaves]),
     dealBreakers: dedupeStringArray([...(fallback.dealBreakers ?? []), ...normalizedJson.dealBreakers]),
@@ -290,6 +310,7 @@ function mergeRefinedRequirement(current: RentalRequirement, editFallback: Renta
     budgetMin: normalizedJson.budgetMin ?? current.budgetMin,
     budgetMax: normalizedJson.budgetMax ?? current.budgetMax,
     bhk: normalizedJson.bhk ?? current.bhk,
+    propertyTypes: normalizedJson.propertyTypes.length ? normalizedJson.propertyTypes : current.propertyTypes,
     furnishing: normalizedJson.furnishing ?? current.furnishing,
     moveInDate: normalizedJson.moveInDate ?? current.moveInDate,
     tenantType: normalizedJson.tenantType ?? current.tenantType,
@@ -337,7 +358,7 @@ const systemPrompt = [
 ].join(" ");
 
 const schemaInstruction =
-  "Return exactly these top-level fields: city, preferredLocalities, budgetMin, budgetMax, bhk, furnishing, moveInDate, tenantType, brokeragePreference, parkingRequired, petsRequired, mustHaves, niceToHaves, dealBreakers, subjectivePreferences, missingFields, clarifyingQuestions, confidence. subjectivePreferences items must have: preference, type, importance, evidenceNeeded.";
+  "Return exactly these top-level fields: city, preferredLocalities, budgetMin, budgetMax, bhk, propertyTypes, furnishing, moveInDate, tenantType, brokeragePreference, parkingRequired, petsRequired, mustHaves, niceToHaves, dealBreakers, subjectivePreferences, missingFields, clarifyingQuestions, confidence. propertyTypes must be an array using only these labels when applicable: Independent / Builder floors, Individual house / Villa, Flats / Apartments, Duplex. subjectivePreferences items must have: preference, type, importance, evidenceNeeded.";
 
 export async function parseRentalRequirement(prompt: string): Promise<{ parsed: RentalRequirement; fallbackUsed: boolean }> {
   assertRentalSearchMessage(prompt, "initial");

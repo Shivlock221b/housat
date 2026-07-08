@@ -15,6 +15,10 @@ export function PropertyCard({ candidate }: { candidate: any }) {
     typeof property?.vision_analysis === "object" && property.vision_analysis
       ? property.vision_analysis.visualSummary
       : null;
+  const mediaAnalysis = typeof property?.media_analysis === "object" && property.media_analysis ? property.media_analysis : null;
+  const mediaInsight = property?.user_facing_summary || mediaAnalysis?.userFacingCautiousSummary || visionSummary;
+  const finalScore = candidate.final_score ?? candidate.match_score ?? 0;
+  const rankingDetails = typeof candidate.ranking_details === "object" && candidate.ranking_details ? candidate.ranking_details : null;
   return (
     <Card className="overflow-hidden">
       <div className="grid min-h-[260px] place-items-center bg-muted">
@@ -37,8 +41,9 @@ export function PropertyCard({ candidate }: { candidate: any }) {
       <CardContent className="space-y-5">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{candidate.match_score ?? 0}/100 match</Badge>
+            <Badge>{finalScore}/100 match</Badge>
             <Badge>{candidate.recommendation?.replaceAll("_", " ") ?? "review"}</Badge>
+            {candidate.shortlist_bucket ? <Badge>{candidate.shortlist_bucket.replaceAll("_", " ")}</Badge> : null}
             <Badge>{property?.verification_status ?? "unverified"}</Badge>
           </div>
           <h2 className="text-2xl font-semibold">{property?.title ?? "Rental option"}</h2>
@@ -63,13 +68,19 @@ export function PropertyCard({ candidate }: { candidate: any }) {
         <InfoList title="Risks" items={candidate.risks} />
         <InfoList title="Pros" items={candidate.pros?.length ? candidate.pros : property?.pros} />
         <InfoList title="Cons" items={candidate.cons?.length ? candidate.cons : property?.cons} />
+        {rankingDetails?.reasonForRank ? (
+          <div className="rounded-md border border-border bg-muted p-3 text-sm">
+            <p className="font-medium">Why this is shortlisted</p>
+            <p className="mt-1 text-muted-foreground">{rankingDetails.reasonForRank}</p>
+          </div>
+        ) : null}
         <div className="rounded-md border border-border bg-muted p-3 text-sm">
           <p className="font-medium">Subjective fit</p>
           <p className="mt-1 text-muted-foreground">Spaciousness: {property?.spaciousness_score ? `possible (${property.spaciousness_score}/10), needs room video` : "unknown"}</p>
           <p className="text-muted-foreground">Sunlight: {property?.sunlight_score ? `possible (${property.sunlight_score}/10), needs daytime video` : "not verified"}</p>
           <p className="text-muted-foreground">Maintenance condition: {property?.maintenance_condition_score ? `possible (${property.maintenance_condition_score}/10)` : "unknown"}</p>
           {property?.general_quality_score ? <p className="text-muted-foreground">Visual quality: possible ({property.general_quality_score}/10), admin reviewed</p> : null}
-          {visionSummary ? <p className="mt-2 text-muted-foreground">Image review: {visionSummary}</p> : null}
+          {mediaInsight ? <p className="mt-2 text-muted-foreground">Media insight: {mediaInsight}</p> : null}
         </div>
       </CardContent>
     </Card>

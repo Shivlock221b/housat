@@ -15,6 +15,9 @@ export function buildSearchDocument(property: Partial<Property>) {
     `Pros: ${(property.pros ?? []).join(", ")}.`,
     `Cons: ${(property.cons ?? []).join(", ")}.`,
     `Missing info: ${(property.missing_info ?? []).join(", ")}.`,
+    `User-facing summary: ${property.user_facing_summary ?? ""}.`,
+    `Admin summary: ${property.admin_summary ?? ""}.`,
+    `Media analysis: ${typeof property.media_analysis === "object" && property.media_analysis ? JSON.stringify(property.media_analysis) : ""}.`,
     `Visual analysis: ${typeof property.vision_analysis === "object" && property.vision_analysis ? JSON.stringify(property.vision_analysis) : ""}.`
   ].join("\n");
 }

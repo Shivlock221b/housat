@@ -5,6 +5,7 @@ import { buildSearchDocument } from "@/lib/agents/searchDocument";
 import { enrichProperty } from "@/lib/agents/propertyEnrichmentAgent";
 import { mergeVisionIntoProperty } from "@/lib/agents/propertyVisionAgent";
 import { scoreProperty } from "@/lib/agents/propertyScoringAgent";
+import { rankAndPersistShortlist } from "@/lib/agents/shortlistRankingAgent";
 import { RentalRequirementSchema } from "@/lib/agents/schemas";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
@@ -37,6 +38,7 @@ export async function POST(request: Request, { params }: { params: { ticketId: s
     budgetMin: ticket.budget_min ?? null,
     budgetMax: ticket.budget_max ?? null,
     bhk: ticket.bhk ?? null,
+    propertyTypes: ticket.property_types ?? [],
     furnishing: ticket.furnishing ?? null,
     moveInDate: ticket.move_in_date ?? null,
     tenantType: ticket.tenant_type ?? null,
@@ -57,28 +59,28 @@ export async function POST(request: Request, { params }: { params: { ticketId: s
     : rows;
   let imported = 0;
   for (const raw of importRows) {
-    const { enrichment, vision } = await enrichProperty(raw);
+    const { enrichment, vision, fallbackUsed, visionFallbackUsed } = await enrichProperty(raw, { ticketRequirements: requirements });
     const baseProperty = {
       source: text(raw.source) ?? "admin_upload",
       source_url: text(raw.source_url),
       title: enrichment.normalizedTitle,
       description: enrichment.normalizedDescription,
-      city: text(raw.city) ?? ticket.city,
-      locality: text(raw.locality),
+      city: enrichment.normalizedCity ?? text(raw.city) ?? ticket.city,
+      locality: enrichment.normalizedLocality ?? text(raw.locality),
       address_hint: text(raw.address_hint),
       rent: enrichment.cleanedRent,
       maintenance: enrichment.cleanedMaintenance,
-      deposit: text(raw.deposit),
+      deposit: enrichment.cleanedDeposit ?? text(raw.deposit),
       brokerage: enrichment.normalizedBrokerage,
       bhk: enrichment.normalizedBhk,
       furnishing: enrichment.normalizedFurnishing,
       carpet_area: text(raw.carpet_area),
       floor: text(raw.floor),
       total_floors: text(raw.total_floors),
-      parking: text(raw.parking),
-      available_from: text(raw.available_from),
-      tenant_allowed: text(raw.tenant_allowed),
-      pets_allowed: text(raw.pets_allowed),
+      parking: enrichment.normalizedParking ?? text(raw.parking),
+      available_from: enrichment.normalizedAvailableFrom ?? text(raw.available_from),
+      tenant_allowed: enrichment.normalizedTenantAllowed ?? text(raw.tenant_allowed),
+      pets_allowed: enrichment.normalizedPetsAllowed ?? text(raw.pets_allowed),
       property_type: text(raw.property_type),
       photos: enrichment.normalizedPhotos,
       video_url: text(raw.video_url),
@@ -97,6 +99,10 @@ export async function POST(request: Request, { params }: { params: { ticketId: s
       cons: enrichment.normalizedCons,
       missing_info: enrichment.normalizedMissingInfo,
       admin_notes: text(raw.admin_notes),
+      media_analysis: enrichment.mediaAnalysis ?? null,
+      user_facing_summary: enrichment.userFacingCautiousSummary ?? enrichment.cautiousUserSummary,
+      admin_summary: enrichment.adminSummary,
+      enrichment_details: { enrichment, fallbackUsed, visionFallbackUsed },
       raw_import: raw,
       is_global_inventory: true,
       is_published: false
@@ -130,5 +136,6 @@ export async function POST(request: Request, { params }: { params: { ticketId: s
   }
 
   await supabase.from("rental_tickets").update({ status: "shortlist_uploaded" }).eq("id", params.ticketId);
+  await rankAndPersistShortlist(params.ticketId, requirements);
   return NextResponse.json({ imported });
 }

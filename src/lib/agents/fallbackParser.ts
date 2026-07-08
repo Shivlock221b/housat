@@ -13,6 +13,12 @@ const mustHaveTerms = [
   "furnished",
   "metro nearby"
 ];
+const propertyTypeOptions = [
+  "Independent / Builder floors",
+  "Individual house / Villa",
+  "Flats / Apartments",
+  "Duplex"
+];
 
 function extractBathroomRequirements(lower: string, bhk: string | null) {
   const requirements: string[] = [];
@@ -67,6 +73,23 @@ function normalizeBhk(text: string) {
   return match ? `${match[1]}BHK` : null;
 }
 
+function extractPropertyTypes(lower: string) {
+  const propertyTypes: string[] = [];
+  if (/\b(?:independent|builder)\s+floors?\b/.test(lower)) {
+    propertyTypes.push(propertyTypeOptions[0]);
+  }
+  if (/\b(?:individual\s+house|villa|independent\s+house)\b/.test(lower)) {
+    propertyTypes.push(propertyTypeOptions[1]);
+  }
+  if (/\b(?:flat|flats|apartment|apartments)\b/.test(lower)) {
+    propertyTypes.push(propertyTypeOptions[2]);
+  }
+  if (/\bduplex\b/.test(lower)) {
+    propertyTypes.push(propertyTypeOptions[3]);
+  }
+  return [...new Set(propertyTypes)];
+}
+
 export function fallbackParseRequirement(prompt: string): RentalRequirement {
   const lower = prompt.toLowerCase();
   const budgetRange = lower.match(/(\d+(?:\.\d+)?\s*(?:k|l|lac|lakh)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?\s*(?:k|l|lac|lakh)?)/i);
@@ -92,6 +115,7 @@ export function fallbackParseRequirement(prompt: string): RentalRequirement {
         ? "okay up to 1 month"
         : null;
   const bhk = normalizeBhk(prompt);
+  const propertyTypes = extractPropertyTypes(lower);
   const bathroomRequirements = extractBathroomRequirements(lower, bhk);
   const mustHaves = [...new Set([...mustHaveTerms.filter((term) => lower.includes(term)), ...bathroomRequirements])];
   const subjectivePreferences = [
@@ -113,6 +137,7 @@ export function fallbackParseRequirement(prompt: string): RentalRequirement {
     budgetMin: budgetRange ? parseBudgetPair(budgetRange[1], budgetRange[2]).min : null,
     budgetMax: budgetRange ? parseBudgetPair(budgetRange[1], budgetRange[2]).max : maxBudget ? parseMoney(maxBudget[1]) : null,
     bhk,
+    propertyTypes,
     furnishing,
     moveInDate: /(?:move[-\s]?in|available|by)\s+([A-Za-z]+\s+\d{1,2}|\d{1,2}\/\d{1,2}\/?\d{0,4})/i.exec(prompt)?.[1] ?? null,
     tenantType,

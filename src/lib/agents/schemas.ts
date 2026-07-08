@@ -6,6 +6,7 @@ export const RentalRequirementSchema = z.object({
   budgetMin: z.number().nullable(),
   budgetMax: z.number().nullable(),
   bhk: z.string().nullable(),
+  propertyTypes: z.array(z.string()).default([]),
   furnishing: z.string().nullable(),
   moveInDate: z.string().nullable(),
   tenantType: z.string().nullable(),
@@ -35,15 +36,26 @@ export const PropertyEnrichmentSchema = z.object({
   normalizedDescription: z.string().nullable(),
   cleanedRent: z.number().nullable(),
   cleanedMaintenance: z.number().nullable(),
+  cleanedDeposit: z.string().nullable().optional(),
   normalizedBhk: z.string().nullable(),
   normalizedFurnishing: z.string().nullable(),
   normalizedBrokerage: z.string().nullable(),
+  normalizedCity: z.string().nullable().optional(),
+  normalizedLocality: z.string().nullable().optional(),
+  normalizedParking: z.string().nullable().optional(),
+  normalizedTenantAllowed: z.string().nullable().optional(),
+  normalizedPetsAllowed: z.string().nullable().optional(),
+  normalizedAvailableFrom: z.string().nullable().optional(),
   normalizedPhotos: z.array(z.string()).default([]),
   normalizedPros: z.array(z.string()).default([]),
   normalizedCons: z.array(z.string()).default([]),
   normalizedMissingInfo: z.array(z.string()).default([]),
   verificationStatus: z.string().nullable(),
   cautiousUserSummary: z.string().nullable(),
+  userFacingCautiousSummary: z.string().nullable().optional(),
+  adminSummary: z.string().nullable().optional(),
+  mediaAnalysis: z.unknown().optional(),
+  enrichmentDetails: z.unknown().optional(),
   spaciousnessScore: z.number().min(0).max(10).nullable(),
   sunlightScore: z.number().min(0).max(10).nullable(),
   maintenanceConditionScore: z.number().min(0).max(10).nullable(),
@@ -53,6 +65,32 @@ export const PropertyEnrichmentSchema = z.object({
   visionRisks: z.array(z.string()).default([]).optional(),
   subjectiveNotes: z.record(z.string()).default({}),
   suggestedVerificationQuestions: z.array(z.string()).default([]),
+  verificationQuestions: z.array(z.string()).default([]).optional(),
+  confidence: z.number().min(0).max(1)
+});
+
+const MediaSignalSchema = z.object({
+  score: z.number().min(0).max(10).nullable(),
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(z.string()).default([]),
+  risks: z.array(z.string()).default([]),
+  needsVerification: z.array(z.string()).default([])
+});
+
+export const PropertyMediaAnalysisSchema = z.object({
+  mediaAvailable: z.boolean(),
+  analyzedPhotosCount: z.number().default(0),
+  analyzedVideosCount: z.number().default(0),
+  roomsDetected: z.array(z.string()).default([]),
+  spaciousness: MediaSignalSchema,
+  sunlight: MediaSignalSchema,
+  maintenanceCondition: MediaSignalSchema,
+  ventilation: MediaSignalSchema,
+  redFlags: z.array(z.string()).default([]),
+  missingMedia: z.array(z.string()).default([]),
+  recommendedQuestions: z.array(z.string()).default([]),
+  userFacingCautiousSummary: z.string(),
+  adminSummary: z.string(),
   confidence: z.number().min(0).max(1)
 });
 
@@ -111,6 +149,25 @@ export const PropertyScoreSchema = z.object({
   })
 });
 
+export const ShortlistRankingSchema = z.object({
+  rankedCandidates: z.array(
+    z.object({
+      candidateId: z.string(),
+      propertyId: z.string(),
+      rank: z.number(),
+      finalScore: z.number().min(0).max(100),
+      shortlistBucket: z.enum(["top_pick", "strong_match", "backup_option", "needs_verification", "do_not_show"]),
+      reasonForRank: z.string(),
+      adminAction: z.string()
+    })
+  ),
+  adminSummary: z.string(),
+  shortlistGaps: z.array(z.string()).default([]),
+  recommendedNextSourcingActions: z.array(z.string()).default([])
+});
+
 export type RentalRequirement = z.infer<typeof RentalRequirementSchema>;
 export type PropertyScore = z.infer<typeof PropertyScoreSchema>;
 export type PropertyVision = z.infer<typeof PropertyVisionSchema>;
+export type PropertyMediaAnalysis = z.infer<typeof PropertyMediaAnalysisSchema>;
+export type ShortlistRanking = z.infer<typeof ShortlistRankingSchema>;

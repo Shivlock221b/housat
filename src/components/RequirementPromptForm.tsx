@@ -15,7 +15,6 @@ import {
   Loader2,
   MapPin,
   MessageCircleOff,
-  PencilLine,
   ShieldCheck,
   SlidersHorizontal,
   Sofa,
@@ -23,7 +22,6 @@ import {
   X
 } from "lucide-react";
 import { HousatLogo } from "@/components/HousatLogo";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
@@ -34,6 +32,7 @@ type Parsed = {
   budgetMin: number | null;
   budgetMax: number | null;
   bhk: string | null;
+  propertyTypes: string[];
   furnishing: string | null;
   moveInDate: string | null;
   tenantType: string | null;
@@ -68,6 +67,7 @@ type StructuredRequirementUpdate = {
 
 type RequirementStep =
   | { kind: "choice"; key: keyof Parsed; label: string; icon: ReactNode; options: string[]; toUpdate: (option: string) => StructuredRequirementUpdate }
+  | { kind: "multiChoice"; key: keyof Parsed; label: string; icon: ReactNode; options: string[]; toUpdate: (options: string[]) => StructuredRequirementUpdate }
   | { kind: "text"; key: keyof Parsed; label: string; icon: ReactNode; placeholder: string; toUpdate: (value: string) => StructuredRequirementUpdate }
   | { kind: "budget" }
   | { kind: "date" }
@@ -80,12 +80,18 @@ type FollowUpState = {
 
 type ContactStep = "name" | "whatsapp" | "availability" | null;
 
-type ReviewState = "pending" | "reviewing" | "approved";
+type ReviewState = "pending" | "reviewing";
 
 const defaultPrompt =
   "Looking for a 2BHK in Gurgaon near Cyber City under 55k, semi furnished, good sunlight, family-friendly, parking needed, move-in by August 1.";
 const quickChips = ["parking", "good sunlight", "attached bathrooms", "near metro", "no brokerage", "family-friendly", "bachelor-friendly", "balcony", "gated society"];
 const loadingStates = ["Thinking through your brief", "Gathering search signals", "Formulating filters", "Checking what is missing"];
+const propertyTypeOptions = [
+  "Independent / Builder floors",
+  "Individual house / Villa",
+  "Flats / Apartments",
+  "Duplex"
+];
 
 function list(value?: string[] | null) {
   return value?.length ? value.join(", ") : "Not specified";
@@ -102,6 +108,7 @@ function getMissingSearchFields(parsed: Parsed | null) {
     !parsed.city && "city",
     !parsed.budgetMax && "budget maximum",
     !parsed.bhk && "BHK",
+    !parsed.propertyTypes?.length && "property type",
     !parsed.preferredLocalities?.length && "preferred localities"
   ].filter(Boolean) as string[];
 }
@@ -126,6 +133,7 @@ function removeMissingFields(missingFields: string[], clears: Array<keyof Parsed
     preferredLocalities: ["locality", "localities", "preferred"],
     budgetMax: ["budget"],
     bhk: ["bhk"],
+    propertyTypes: ["property type", "property"],
     furnishing: ["furnishing", "furnished"],
     moveInDate: ["move", "date"],
     tenantType: ["tenant"],
@@ -172,6 +180,20 @@ function getNextRequirementStep(parsed: Parsed | null, followUps: FollowUpState)
       icon: <BedDouble className="h-4 w-4" />,
       options: ["Studio", "1BHK", "2BHK", "3BHK", "4BHK", "5BHK+"],
       toUpdate: (option) => ({ message: `BHK: ${option}`, patch: { bhk: option }, clears: ["bhk"] })
+    };
+  }
+  if (!parsed.propertyTypes?.length) {
+    return {
+      kind: "multiChoice",
+      key: "propertyTypes",
+      label: "Which property types should I include?",
+      icon: <Home className="h-4 w-4" />,
+      options: propertyTypeOptions,
+      toUpdate: (options) => ({
+        message: `Property types: ${options.join(", ")}`,
+        patch: { propertyTypes: options },
+        clears: ["propertyTypes"]
+      })
     };
   }
   if (!parsed.tenantType) {
@@ -275,32 +297,28 @@ function getRequirementPrompt(step: RequirementStep) {
 
 function getContactPrompt(step: Exclude<ContactStep, null>) {
   if (step === "name") return "What is your name?";
-  if (step === "whatsapp") return "What WhatsApp number should we use?";
+  if (step === "whatsapp") return "What WhatsApp number should we use? We will only use it to contact you about your shortlist and visit coordination. We will not share it with anyone else.";
   return "When are you usually available for visits?";
 }
 
-function getComposerPlaceholder(activeRequirementStep: RequirementStep | null, activeContactStep: ContactStep, readyForSummary: boolean, reviewState: ReviewState, parsed: Parsed | null) {
+function getComposerPlaceholder(activeRequirementStep: RequirementStep | null, activeContactStep: ContactStep, parsed: Parsed | null) {
   if (activeContactStep === "name") return "Type your name...";
   if (activeContactStep === "whatsapp") return "Type your WhatsApp number...";
   if (activeContactStep === "availability") return "Type your visit availability...";
   if (activeRequirementStep?.kind === "groqText") return activeRequirementStep.key === "dealBreakers" ? "Type your deal breakers..." : "Type any notes...";
   if (activeRequirementStep?.kind === "text" && activeRequirementStep.key === "city") return "Type the city...";
-  if (readyForSummary && reviewState === "reviewing") return "Tell me what to change, or say looks good...";
   if (parsed) return "Refine your search...";
   return "Describe your ideal rental home...";
 }
 
-function getComposerHelper(activeRequirementStep: RequirementStep | null, activeContactStep: ContactStep, readyForSummary: boolean, reviewState: ReviewState, parsed: Parsed | null) {
+function getComposerHelper(activeRequirementStep: RequirementStep | null, activeContactStep: ContactStep, readyForSummary: boolean, parsed: Parsed | null) {
+  if (activeContactStep === "whatsapp") return "Used only for Housat shortlist updates on WhatsApp. Never shared with brokers or third parties.";
   if (activeContactStep) return "Reply here and I will save it to your request.";
   if (activeRequirementStep?.kind === "groqText") return activeRequirementStep.key === "dealBreakers" ? "Example: no ground floor, no old construction" : "Example: prefer quiet lane, balcony, good ventilation";
   if (activeRequirementStep?.kind === "text" && activeRequirementStep.key === "city") return "Example: Gurgaon";
-  if (readyForSummary && reviewState === "reviewing") return "Example: add balcony, raise budget to 75k, or looks good";
+  if (readyForSummary) return "Tap any summary block to edit it, then start the search when ready.";
   if (parsed) return "Example: make budget 75k and add balcony";
   return "Example: 2BHK near Cyber City under 55k, good sunlight, parking needed";
-}
-
-function isApprovalMessage(text: string) {
-  return /^(looks?\s+good|yes|yes[, ]+looks?\s+good|approved|confirm|confirmed|all\s+good|good|no\s+changes?|nothing\s+else|go\s+ahead|start|submit)$/i.test(text.trim());
 }
 
 export function RequirementPromptForm() {
@@ -338,9 +356,10 @@ export function RequirementPromptForm() {
   const readyForContact = Boolean(parsed && !activeRequirementStep);
   const activeContactStep = readyForContact ? getContactStep(contact) : null;
   const readyForSummary = Boolean(readyForContact && !activeContactStep);
-  const canCreate = Boolean(readyForSummary && parsed && reviewState === "approved");
-  const composerPlaceholder = getComposerPlaceholder(activeRequirementStep, activeContactStep, readyForSummary, reviewState, parsed);
-  const composerHelper = getComposerHelper(activeRequirementStep, activeContactStep, readyForSummary, reviewState, parsed);
+  const canCreate = Boolean(readyForSummary && parsed && !missingSearchFields.length);
+  const composerDisabled = loading || (readyForSummary && reviewState !== "pending");
+  const composerPlaceholder = getComposerPlaceholder(activeRequirementStep, activeContactStep, parsed);
+  const composerHelper = getComposerHelper(activeRequirementStep, activeContactStep, readyForSummary, parsed);
 
   useEffect(() => {
     if (!loading) {
@@ -401,9 +420,6 @@ export function RequirementPromptForm() {
     if (followUpKey) {
       setFollowUps((current) => ({ ...current, [followUpKey]: true }));
     }
-    if (hadParsedRequirement && !followUpKey && readyForSummary && reviewState === "reviewing") {
-      setMessages((items) => [...items, { role: "assistant", content: "Search Edited" }]);
-    }
   }
 
   async function sendMessage() {
@@ -428,13 +444,8 @@ export function RequirementPromptForm() {
     }
 
     if (readyForSummary && reviewState === "reviewing") {
-      if (isApprovalMessage(text)) {
-        setComposer("");
-        setMessages((items) => [...items, { role: "user", content: text }, { role: "assistant", content: "Perfect. I can create your rental search request now." }]);
-        setReviewState("approved");
-        return;
-      }
-      await submitText(text);
+      setComposer("");
+      setMessages((items) => [...items, { role: "assistant", content: "You can edit the brief by tapping a summary block. No Groq call needed for these final adjustments." }]);
       return;
     }
 
@@ -467,6 +478,19 @@ export function RequirementPromptForm() {
     });
   }
 
+  function applySummaryUpdate(patch: Partial<Parsed>, clears: Array<keyof Parsed>) {
+    setParsed((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        ...patch,
+        missingFields: removeMissingFields(current.missingFields, clears),
+        confidence: Math.max(current.confidence ?? 0.7, 0.82)
+      };
+    });
+    setReviewState("reviewing");
+  }
+
   async function createTicket() {
     if (!parsed) return;
     setLoading(true);
@@ -487,6 +511,7 @@ export function RequirementPromptForm() {
         budgetMin: parsed.budgetMin,
         budgetMax: parsed.budgetMax,
         bhk: parsed.bhk,
+        propertyTypes: parsed.propertyTypes,
         furnishing: parsed.furnishing,
         moveInDate: parsed.moveInDate,
         tenantType: parsed.tenantType,
@@ -544,15 +569,14 @@ export function RequirementPromptForm() {
             {messages.map((message, index) => (
               <MessageBubble key={`${message.role}-${index}`} message={message} />
             ))}
-            {readyForSummary && parsed && reviewState === "reviewing" ? (
+            {readyForSummary && parsed && reviewState !== "pending" ? (
               <div className="flex items-start gap-3">
                 <AssistantAvatar />
                 <div className="w-full max-w-[94%] rounded-[22px] rounded-tl-md border border-border/70 bg-card/95 p-4 text-sm text-foreground shadow-[0_16px_36px_rgba(15,61,58,0.08)]">
-                  <SearchSummaryBubble parsed={parsed} missingSearchFields={missingSearchFields} />
+                  <SearchSummaryBubble parsed={parsed} missingSearchFields={missingSearchFields} onUpdate={applySummaryUpdate} />
                 </div>
               </div>
             ) : null}
-            {readyForSummary && reviewState === "reviewing" ? <ReviewPromptBubble /> : null}
             {activeRequirementStep && activeRequirementStep.kind !== "groqText" && !(activeRequirementStep.kind === "text" && activeRequirementStep.key === "city") ? (
               <RequirementStepBubble
                 step={activeRequirementStep}
@@ -600,9 +624,10 @@ export function RequirementPromptForm() {
                     }
                   }}
                   placeholder={composerPlaceholder}
+                  disabled={composerDisabled}
                   className="max-h-24 min-h-11 resize-none border-0 bg-transparent px-2 py-2.5 text-sm leading-5 shadow-none focus:ring-0"
                 />
-                <Button onClick={sendMessage} disabled={!composer.trim() || loading} size="sm" className="mb-1 h-9 w-9 shrink-0 rounded-full border-primary bg-primary px-0 shadow-[0_8px_18px_rgba(15,61,58,0.22)]">
+                <Button onClick={sendMessage} disabled={!composer.trim() || composerDisabled} size="sm" className="mb-1 h-9 w-9 shrink-0 rounded-full border-primary bg-primary px-0 shadow-[0_8px_18px_rgba(15,61,58,0.22)]">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                   <span className="sr-only">Send</span>
                 </Button>
@@ -668,6 +693,7 @@ function getProfileProgress(parsed: Parsed | null) {
     Boolean(parsed?.preferredLocalities?.length || parsed?.city),
     Boolean(parsed?.budgetMax),
     Boolean(parsed?.bhk),
+    Boolean(parsed?.propertyTypes?.length),
     Boolean(parsed?.furnishing),
     Boolean(parsed?.tenantType),
     Boolean(parsed?.moveInDate),
@@ -786,6 +812,7 @@ function SearchProfileContent(props: {
             <ProfileRow icon={<MapPin />} label="Location" value={[...(props.parsed?.preferredLocalities ?? []), props.parsed?.city].filter(Boolean).join(", ") || "Pending"} onEdit={() => props.setComposer("Change location to ")} />
             <ProfileRow icon={<Banknote />} label="Budget" value={formatBudget(props.parsed ?? emptyParsed)} onEdit={() => props.setComposer("Change budget to ")} />
             <ProfileRow icon={<Home />} label="Home type" value={props.parsed?.bhk || "Pending"} onEdit={() => props.setComposer("Change BHK to ")} />
+            <ProfileRow icon={<Home />} label="Property type" value={props.parsed?.propertyTypes?.join(", ") || "Pending"} onEdit={() => props.setComposer("Change property type to ")} />
             <ProfileRow icon={<Sofa />} label="Furnishing" value={props.parsed?.furnishing || "Pending"} onEdit={() => props.setComposer("Change furnishing to ")} />
             <ProfileRow icon={<UsersRound />} label="Tenant type" value={props.parsed?.tenantType || "Pending"} onEdit={() => props.setComposer("Change tenant type to ")} />
             <ProfileRow icon={<CalendarDays />} label="Move-in" value={props.parsed?.moveInDate || "Pending"} onEdit={() => props.setComposer("Change move-in date to ")} />
@@ -846,6 +873,7 @@ const emptyParsed: Parsed = {
   budgetMin: null,
   budgetMax: null,
   bhk: null,
+  propertyTypes: [],
   furnishing: null,
   moveInDate: null,
   tenantType: null,
@@ -904,6 +932,9 @@ function RequirementStepBubble({
         {step.kind === "choice" ? (
           <ChoiceBlock icon={step.icon} label={step.label} options={step.options} loading={loading} onSelect={(option) => onStructuredUpdate(step.toUpdate(option))} />
         ) : null}
+        {step.kind === "multiChoice" ? (
+          <MultiChoiceBlock icon={step.icon} label={step.label} options={step.options} loading={loading} onSubmit={(options) => onStructuredUpdate(step.toUpdate(options))} />
+        ) : null}
         {step.kind === "text" ? (
           <TextAnswerBlock icon={step.icon} label={step.label} placeholder={step.placeholder} loading={loading} onSubmit={(value) => onStructuredUpdate(step.toUpdate(value))} />
         ) : null}
@@ -939,6 +970,54 @@ function ChoiceBlock(props: {
             {option}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function MultiChoiceBlock(props: {
+  icon: ReactNode;
+  label: string;
+  options: string[];
+  loading: boolean;
+  onSubmit: (options: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggle(option: string) {
+    setSelected((current) => current.includes(option) ? current.filter((item) => item !== option) : [...current, option]);
+  }
+
+  return (
+    <div className="rounded-[18px] border border-border/70 bg-white/60 p-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <span className="text-primary">{props.icon}</span>
+        {props.label}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {props.options.map((option) => {
+          const isSelected = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              disabled={props.loading}
+              onClick={() => toggle(option)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition disabled:pointer-events-none disabled:opacity-50 ${
+                isSelected
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card/90 text-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button type="button" size="sm" disabled={!selected.length || props.loading} className="rounded-full" onClick={() => props.onSubmit(selected)}>
+          Add selected
+        </Button>
       </div>
     </div>
   );
@@ -1063,23 +1142,39 @@ function CreateRequestBubble(props: { loading: boolean; canCreate: boolean; onCr
   );
 }
 
-function ReviewPromptBubble() {
-  return (
-    <div className="flex items-start gap-3">
-      <AssistantAvatar />
-      <div className="max-w-[86%] rounded-[20px] rounded-tl-md border border-border/70 bg-card/95 px-4 py-3 text-sm leading-6 text-foreground shadow-[0_16px_34px_rgba(15,61,58,0.08)]">
-        Would you like to edit anything before I create the search request? Reply with a change, or say it looks good.
-      </div>
-    </div>
-  );
-}
+type SummaryField =
+  | "city"
+  | "preferredLocalities"
+  | "budgetMax"
+  | "bhk"
+  | "propertyTypes"
+  | "furnishing"
+  | "moveInDate"
+  | "tenantType"
+  | "brokeragePreference"
+  | "parkingRequired"
+  | "petsRequired"
+  | "mustHaves"
+  | "niceToHaves"
+  | "dealBreakers";
 
-function SearchSummaryBubble({ parsed, missingSearchFields }: { parsed: Parsed; missingSearchFields: string[] }) {
+function SearchSummaryBubble({
+  parsed,
+  missingSearchFields,
+  onUpdate
+}: {
+  parsed: Parsed;
+  missingSearchFields: string[];
+  onUpdate: (patch: Partial<Parsed>, clears: Array<keyof Parsed>) => void;
+}) {
+  const [editing, setEditing] = useState<SummaryField | null>(null);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="brand-wordmark text-xl text-primary">Your rental brief</p>
-        {/* <Badge className="rounded-full bg-primary text-primary-foreground">{Math.round((parsed.confidence ?? 0) * 100)}% confidence</Badge> */}
+        <span className="rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+          Tap a field to edit
+        </span>
       </div>
       {missingSearchFields.length ? (
         <div className="rounded-[16px] border border-amber-200 bg-amber-50/80 p-3 text-amber-800">
@@ -1091,31 +1186,145 @@ function SearchSummaryBubble({ parsed, missingSearchFields }: { parsed: Parsed; 
         </div>
       )}
       <div className="grid gap-2 sm:grid-cols-2">
-        <Detail label="City" value={parsed.city} />
-        <Detail label="Localities" value={list(parsed.preferredLocalities)} />
-        <Detail label="Budget" value={formatBudget(parsed)} />
-        <Detail label="BHK" value={parsed.bhk} />
-        <Detail label="Furnishing" value={parsed.furnishing} />
-        <Detail label="Move-in" value={parsed.moveInDate} />
-        <Detail label="Tenant" value={parsed.tenantType} />
-        <Detail label="Brokerage" value={parsed.brokeragePreference} />
-        <Detail label="Must-haves" value={list(parsed.mustHaves)} wide />
-        <Detail label="Nice-to-haves" value={list(parsed.niceToHaves)} wide />
-        <Detail label="Deal-breakers" value={list(parsed.dealBreakers)} wide />
+        <EditableDetail field="city" label="City" value={parsed.city || ""} editing={editing} setEditing={setEditing} onSave={(value) => onUpdate({ city: value }, ["city"])} />
+        <EditableDetail field="preferredLocalities" label="Localities" value={list(parsed.preferredLocalities)} editing={editing} setEditing={setEditing} multiline onSave={(value) => onUpdate({ preferredLocalities: splitList(value) }, ["preferredLocalities"])} />
+        <EditableDetail field="budgetMax" label="Budget" value={formatBudget(parsed)} editValue={parsed.budgetMax ? String(parsed.budgetMax) : ""} editing={editing} setEditing={setEditing} inputMode="numeric" onSave={(value) => {
+          const budget = parseBudgetInput(value);
+          if (!budget) return "Enter a valid budget amount.";
+          onUpdate({ budgetMax: budget }, ["budgetMax"]);
+        }} />
+        <EditableDetail field="bhk" label="BHK" value={parsed.bhk || ""} editing={editing} setEditing={setEditing} options={["Studio", "1BHK", "2BHK", "3BHK", "4BHK", "5BHK+"]} onSave={(value) => onUpdate({ bhk: value }, ["bhk"])} />
+        <EditableDetail field="propertyTypes" label="Property type" value={list(parsed.propertyTypes)} editing={editing} setEditing={setEditing} multiOptions={propertyTypeOptions} onSave={(value) => onUpdate({ propertyTypes: splitList(value) }, ["propertyTypes"])} />
+        <EditableDetail field="furnishing" label="Furnishing" value={parsed.furnishing || ""} editing={editing} setEditing={setEditing} options={["Fully furnished", "Semi furnished", "Unfurnished", "Flexible"]} onSave={(value) => onUpdate({ furnishing: value }, ["furnishing"])} />
+        <EditableDetail field="moveInDate" label="Move-in" value={parsed.moveInDate || ""} editing={editing} setEditing={setEditing} type="date" onSave={(value) => onUpdate({ moveInDate: value }, ["moveInDate"])} />
+        <EditableDetail field="tenantType" label="Tenant" value={parsed.tenantType || ""} editing={editing} setEditing={setEditing} options={["Family", "Bachelor", "Couple", "Company lease", "Flexible"]} onSave={(value) => onUpdate({ tenantType: value }, ["tenantType"])} />
+        <EditableDetail field="brokeragePreference" label="Brokerage" value={parsed.brokeragePreference || ""} editing={editing} setEditing={setEditing} options={["No brokerage", "Brokerage okay", "Prefer low brokerage", "Flexible"]} onSave={(value) => onUpdate({ brokeragePreference: value }, ["brokeragePreference"])} />
+        <EditableDetail field="parkingRequired" label="Parking" value={parsed.parkingRequired ? "Required" : "Not needed / flexible"} editing={editing} setEditing={setEditing} options={["Required", "Not needed / flexible"]} onSave={(value) => onUpdate({ parkingRequired: value === "Required" }, ["parkingRequired"])} />
+        <EditableDetail field="petsRequired" label="Pets" value={parsed.petsRequired ? "Pet friendly needed" : "No pets / flexible"} editing={editing} setEditing={setEditing} options={["Pet friendly needed", "No pets / flexible"]} onSave={(value) => onUpdate({ petsRequired: value === "Pet friendly needed" }, ["petsRequired"])} />
+        <EditableDetail field="mustHaves" label="Must-haves" value={list(parsed.mustHaves)} editing={editing} setEditing={setEditing} multiline wide allowEmpty onSave={(value) => onUpdate({ mustHaves: splitList(value) }, ["mustHaves"])} />
+        <EditableDetail field="niceToHaves" label="Nice-to-haves" value={list(parsed.niceToHaves)} editing={editing} setEditing={setEditing} multiline wide allowEmpty onSave={(value) => onUpdate({ niceToHaves: splitList(value) }, ["niceToHaves"])} />
+        <EditableDetail field="dealBreakers" label="Deal-breakers" value={list(parsed.dealBreakers)} editing={editing} setEditing={setEditing} multiline wide allowEmpty onSave={(value) => onUpdate({ dealBreakers: splitList(value) }, ["dealBreakers"])} />
       </div>
-      {/* <div className="rounded-[16px] border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
-        <PencilLine className="mr-1 inline h-3.5 w-3.5" />
-        Want to adjust it? Just reply: &quot;raise budget to 80k&quot;, &quot;remove bachelor-friendly&quot;, or &quot;add balcony&quot;.
-      </div> */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-border bg-muted/25 p-3">
+        <p className="text-xs text-muted-foreground">
+          Edit fields here directly. When everything looks right, use Start my search below.
+        </p>
+      </div>
     </div>
   );
 }
 
-function Detail({ label, value, wide }: { label: string; value?: string | number | null; wide?: boolean }) {
+function EditableDetail({
+  field,
+  label,
+  value,
+  editValue,
+  editing,
+  setEditing,
+  onSave,
+  options,
+  multiOptions,
+  type = "text",
+  inputMode,
+  multiline,
+  wide,
+  allowEmpty
+}: {
+  field: SummaryField;
+  label: string;
+  value: string;
+  editValue?: string;
+  editing: SummaryField | null;
+  setEditing: (field: SummaryField | null) => void;
+  onSave: (value: string) => void | string;
+  options?: string[];
+  multiOptions?: string[];
+  type?: string;
+  inputMode?: "numeric";
+  multiline?: boolean;
+  wide?: boolean;
+  allowEmpty?: boolean;
+}) {
+  const isEditing = editing === field;
+  const [draft, setDraft] = useState(value === "Not specified" ? "" : value);
+  const [error, setError] = useState("");
+  const selectedOptions = multiOptions ? splitList(draft) : [];
+
+  useEffect(() => {
+    if (isEditing) {
+      setDraft(editValue ?? (value === "Not specified" ? "" : value));
+      setError("");
+    }
+  }, [editValue, isEditing, value]);
+
+  function save() {
+    const trimmed = draft.trim();
+    if (!trimmed && !allowEmpty) {
+      setError("This field is required.");
+      return;
+    }
+    const result = onSave(trimmed);
+    if (typeof result === "string") {
+      setError(result);
+      return;
+    }
+    setEditing(null);
+  }
+
+  function toggleMultiOption(option: string) {
+    const next = selectedOptions.includes(option)
+      ? selectedOptions.filter((item) => item !== option)
+      : [...selectedOptions, option];
+    setDraft(next.join(", "));
+  }
+
   return (
-    <div className={`rounded-[16px] border border-border bg-white/55 p-3 ${wide ? "sm:col-span-2" : ""}`}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">{value || "Not specified"}</p>
+    <div className={`rounded-[16px] border border-border bg-white/55 p-3 transition hover:border-primary/25 ${wide ? "sm:col-span-2" : ""}`}>
+      <button type="button" className="w-full text-left" onClick={() => setEditing(field)}>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-medium">{value || "Not specified"}</p>
+      </button>
+      {isEditing ? (
+        <div className="mt-3 space-y-2">
+          {multiOptions ? (
+            <div className="flex flex-wrap gap-2">
+              {multiOptions.map((option) => {
+                const isSelected = selectedOptions.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => toggleMultiOption(option)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card/90 text-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          ) : options ? (
+            <select value={draft} onChange={(event) => setDraft(event.target.value)} className="h-10 w-full rounded-full border border-border bg-card/90 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+              <option value="" disabled>Select {label.toLowerCase()}</option>
+              {options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          ) : multiline ? (
+            <Textarea value={draft} onChange={(event) => setDraft(event.target.value)} className="min-h-24 resize-none rounded-[16px] bg-card/90" />
+          ) : (
+            <Input value={draft} type={type} inputMode={inputMode} onChange={(event) => setDraft(event.target.value)} className="h-10 rounded-full bg-card/90" />
+          )}
+          {error ? <p className="text-xs text-red-700">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button type="button" size="sm" className="rounded-full" onClick={save}>Save</Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

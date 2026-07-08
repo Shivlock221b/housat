@@ -22,6 +22,7 @@ export type RentalTicket = {
   budget_min?: number | null;
   budget_max?: number | null;
   bhk?: string | null;
+  property_types?: string[];
   furnishing?: string | null;
   move_in_date?: string | null;
   tenant_type?: string | null;
@@ -78,6 +79,10 @@ export type Property = {
   cons?: string[];
   missing_info?: string[];
   admin_notes?: string | null;
+  media_analysis?: unknown;
+  user_facing_summary?: string | null;
+  admin_summary?: string | null;
+  enrichment_details?: unknown;
   search_document?: string | null;
   vision_analysis?: unknown;
   vision_confidence?: number | null;
@@ -103,6 +108,10 @@ export type Candidate = {
   verification_questions?: string[];
   subjective_assessments?: unknown;
   ai_score_details?: unknown;
+  final_rank?: number | null;
+  shortlist_bucket?: string | null;
+  final_score?: number | null;
+  ranking_details?: unknown;
   admin_status?: string | null;
   is_published?: boolean;
   properties?: Property;

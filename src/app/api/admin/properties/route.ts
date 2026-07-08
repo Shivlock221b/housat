@@ -16,6 +16,7 @@ export async function POST(request: Request) {
   if (Array.isArray(property.photos) && property.photos.length) {
     const { vision } = await analyzePropertyImages({
       photos: property.photos,
+      videoUrl: property.video_url,
       propertyText: [property.title, property.description, property.search_document].filter(Boolean).join("\n")
     });
     property = mergeVisionIntoProperty(property, vision);

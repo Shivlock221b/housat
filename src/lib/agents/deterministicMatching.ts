@@ -5,6 +5,17 @@ function includes(a?: string | null, b?: string | null) {
   return Boolean(a && b && a.toLowerCase().includes(b.toLowerCase()));
 }
 
+function propertyTypeMatches(propertyType: string | null | undefined, requiredType: string) {
+  if (!propertyType) return false;
+  const property = propertyType.toLowerCase();
+  const required = requiredType.toLowerCase();
+  if (required.includes("builder") || required.includes("independent")) return /builder|independent\s+floor/.test(property);
+  if (required.includes("villa") || required.includes("individual")) return /villa|individual\s+house|independent\s+house/.test(property);
+  if (required.includes("flat") || required.includes("apartment")) return /flat|apartment/.test(property);
+  if (required.includes("duplex")) return /duplex/.test(property);
+  return property.includes(required);
+}
+
 function propertyText(property: Partial<Property>) {
   return [
     property.title,
@@ -53,6 +64,11 @@ export function deterministicPreScore(ticket: RentalRequirement, property: Parti
   if (ticket.bhk && property.bhk && includes(property.bhk, ticket.bhk)) {
     score += 15;
     reasons.push("BHK matches");
+  }
+
+  if (ticket.propertyTypes.length && ticket.propertyTypes.some((type) => propertyTypeMatches(property.property_type, type))) {
+    score += 8;
+    reasons.push("Property type matches");
   }
 
   if (ticket.city && property.city && includes(property.city, ticket.city)) {

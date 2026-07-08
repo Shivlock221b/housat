@@ -1,7 +1,6 @@
-import { JsonOutputParser } from "@langchain/core/output_parsers";
 import type { Property } from "@/lib/types";
 import { deterministicPreScore } from "./deterministicMatching";
-import { getGroqModel } from "./groqClient";
+import { callGeminiPropertyModel } from "./geminiClient";
 import { PropertyScoreSchema, type RentalRequirement } from "./schemas";
 
 function visionEvidence(property: Partial<Property>) {
@@ -110,16 +109,31 @@ export async function scoreProperty(ticketRequirements: RentalRequirement, prope
       readiness: Math.min(20, readiness)
     }
   });
-  const model = getGroqModel();
-  if (!model) return { score: fallback, fallbackUsed: true, deterministicScore: pre.score };
-
   try {
-    const parser = new JsonOutputParser();
-    const response = await model.invoke([
-      ["system", "Score a rental property against a tenant ticket. Hard filters dominate. Keep subjective claims cautious. Return JSON only."],
-      ["human", JSON.stringify({ ticketRequirements, property, deterministicPreScore: pre })]
-    ]);
-    const parsed = PropertyScoreSchema.parse({ ...fallback, ...(await parser.parse(String(response.content))) });
+    const parsedJson = await callGeminiPropertyModel({
+      responseSchemaName: "PropertyScore",
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are helping evaluate rental properties for Housat AI, an Indian rental concierge product. Your job is to assess whether a property is a good fit for a specific tenant's preferences. Be evidence-based and cautious. Do not overclaim. Use photos/videos only as visual evidence, not certainty. Mark anything unverified clearly. Return valid JSON only."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            task:
+              "Score this property against the tenant requirements. Hard filters are 50 points: budget 15, BHK/property type 10, city/locality/commute 10, furnishing 5, brokerage 5, tenant eligibility 5. Soft preferences are 30 points: spaciousness 10, sunlight 10, parking/balcony/gated/quiet/safety/must-haves 10. Readiness is 20 points: verified availability 8, complete cost info 5, useful photos/video 3, visit/availability clarity 4. Respect deal-breakers; reject if a deal-breaker clearly fails. Output only the PropertyScore JSON.",
+            ticketRequirements,
+            property,
+            deterministicPreScore: pre,
+            fallbackScore: fallback,
+            mediaAnalysis: property.media_analysis ?? property.vision_analysis ?? null
+          })
+        }
+      ]
+    });
+    const parsed = PropertyScoreSchema.parse({ ...fallback, ...(typeof parsedJson === "object" && parsedJson ? parsedJson : {}) });
     return { score: parsed, fallbackUsed: false, deterministicScore: pre.score };
   } catch {
     return { score: fallback, fallbackUsed: true, deterministicScore: pre.score };

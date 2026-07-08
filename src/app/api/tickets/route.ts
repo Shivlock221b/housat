@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     budget_min: body.budgetMin || null,
     budget_max: body.budgetMax || null,
     bhk: body.bhk || null,
+    property_types: body.propertyTypes || body.property_types || [],
     furnishing: body.furnishing || null,
     move_in_date: body.moveInDate || null,
     tenant_type: body.tenantType || null,

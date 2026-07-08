@@ -13,6 +13,7 @@ export async function PATCH(request: Request, { params }: { params: { propertyId
   if (Array.isArray(patch.photos) && patch.photos.length) {
     const { vision } = await analyzePropertyImages({
       photos: patch.photos,
+      videoUrl: patch.video_url,
       propertyText: [patch.title, patch.description, patch.search_document].filter(Boolean).join("\n")
     });
     patch = mergeVisionIntoProperty(patch, vision);
